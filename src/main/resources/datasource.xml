@@ -1,0 +1,85 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xmlns:context="http://www.springframework.org/schema/context"
+    xmlns:aop="http://www.springframework.org/schema/aop" 
+    xmlns:tx="http://www.springframework.org/schema/tx"
+    xmlns:rdb="http://www.dangdang.com/schema/ddframe/rdb"
+    xsi:schemaLocation="http://www.springframework.org/schema/beans
+                        http://www.springframework.org/schema/beans/spring-beans.xsd 
+                        http://www.springframework.org/schema/aop
+	 					http://www.springframework.org/schema/aop/spring-aop.xsd
+                        http://www.springframework.org/schema/tx 
+                        http://www.springframework.org/schema/tx/spring-tx.xsd
+                        http://www.springframework.org/schema/context 
+                        http://www.springframework.org/schema/context/spring-context.xsd
+                        http://www.dangdang.com/schema/ddframe/rdb 
+                        http://www.dangdang.com/schema/ddframe/rdb/rdb.xsd">
+
+		<context:component-scan base-package="com.zj.wqc.my.proxy" />
+
+       	<bean id="ds_0" class="org.apache.commons.dbcp.BasicDataSource" destroy-method="close">
+	        <property name="driverClassName" value="com.mysql.jdbc.Driver"/>
+	        <property name="url" value="jdbc:mysql://localhost:3306/ds_0"/>
+	        <property name="username" value="root"/>
+	        <property name="password" value=""/>
+	    </bean>
+    
+	    <bean id="ds_1" class="org.apache.commons.dbcp.BasicDataSource" destroy-method="close">
+	        <property name="driverClassName" value="com.mysql.jdbc.Driver"/>
+	        <property name="url" value="jdbc:mysql://localhost:3306/ds_1"/>
+	        <property name="username" value="root"/>
+	        <property name="password" value=""/>
+	    </bean>
+	    
+	    <bean id="ds_2" class="org.apache.commons.dbcp.BasicDataSource" destroy-method="close">
+	        <property name="driverClassName" value="com.mysql.jdbc.Driver"/>
+	        <property name="url" value="jdbc:mysql://localhost:3306/ds_1"/>
+	        <property name="username" value="root"/>
+	        <property name="password" value=""/>
+	    </bean>
+
+       <bean id="dataSource"  class="com.zj.wqc.my.proxy.ProxyDataSource">
+              <property name="masterDB"  ref="ds_0"></property>
+              <property name="slaveAcceptWay" value="0" />
+              <property name="slaveMapDB">
+				<map>
+					<entry key="ds_1" value-ref="ds_1" />
+					<entry key="ds_2" value-ref="ds_2" /> 
+				</map>
+			</property>
+       </bean>
+
+       <tx:annotation-driven transaction-manager="proxyDBTManager"/>
+
+       <bean id="proxyDBTManager" class="com.zj.wqc.my.proxy.ProxyDBTManager">
+              <property name="dataSource" ref="dataSource"/>
+       </bean>
+
+       <bean id="proxySqlSessionFactory" class="org.mybatis.spring.SqlSessionFactoryBean">
+              <property name="dataSource" ref="dataSource"/>
+              <property name="mapperLocations" value="classpath*:META-INF/mybatis/mappers/OrderMapper.xml"/>
+              <property name="plugins">
+                     <array>
+                            <bean class="com.zj.wqc.my.proxy.ProxyMybatisPlugin" />
+                     </array>
+              </property>
+       </bean>
+
+       <!-- 配置扫描器 -->
+       <bean class="org.mybatis.spring.mapper.MapperScannerConfigurer">
+              <property name="basePackage" value="com.zj.wqc.my.proxy"/>
+              <property name="sqlSessionFactoryBeanName" value="proxySqlSessionFactory"/>
+       </bean>
+       
+       
+       <!-- 销毁线程变量 -->
+	<bean id="proxyDBInterceptor" class="com.zj.wqc.my.intercept.ProxyDBInterceptor"/>
+
+	<!-- spring拦截器控制 -->
+	<aop:config>
+		<aop:pointcut id="operationIntercept"
+					  expression="execution(* com.zj.wqc.my.intercept.service..*Service.*(..))" />
+		<aop:advisor advice-ref="proxyDBInterceptor" pointcut-ref="operationIntercept" />
+	</aop:config>
+</beans>
